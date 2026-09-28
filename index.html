@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Physical AI Workflow Explorer</title>
   <meta name="description" content="Explore how a humanoid robot task moves from data → simulation → robot learning → edge deployment." />
+  <script>
+    /* Apply a saved theme before first paint to avoid a flash. */
+    try {
+      var t = JSON.parse(localStorage.getItem("pawe:theme"));
+      if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  </script>
   <link rel="stylesheet" href="assets/css/style.css" />
 </head>
 <body>
@@ -12,18 +19,22 @@
     <div class="wrap header-inner">
       <a class="brand" href="#/workflow">Physical AI Workflow Explorer</a>
       <nav class="tabs" aria-label="Sections">
-        <a href="#/workflow" data-view="workflow">Explore Workflow</a>
-        <a href="#/budget" data-view="budget">Deployment Budget</a>
-        <a href="#/sim2real" data-view="sim2real">Debug Sim2Real</a>
-        <a href="#/ai" data-view="ai" class="tab-soon">Design with AI</a>
+        <a href="#/workflow" data-view="workflow" data-i18n="tab.workflow">Explore Workflow</a>
+        <a href="#/budget" data-view="budget" data-i18n="tab.budget">Deployment Budget</a>
+        <a href="#/sim2real" data-view="sim2real" data-i18n="tab.sim2real">Debug Sim2Real</a>
+        <a href="#/ai" data-view="ai"><span data-i18n="tab.ai">Design with AI</span> <small class="soon-tag" data-i18n="tab.soon">soon</small></a>
       </nav>
+      <div class="header-tools">
+        <button type="button" class="icon-btn lang-btn" id="lang-toggle">中文</button>
+        <button type="button" class="icon-btn" id="theme-toggle" aria-label="Toggle theme">☾</button>
+      </div>
     </div>
   </header>
 
   <main class="wrap">
     <section class="hero">
-      <h1>Explore how a humanoid robot task moves from <span class="hl">data → simulation → robot learning → edge deployment</span>.</h1>
-      <p class="muted">An interactive engineering guide — not a slide deck. Pick a task, click a stage, and see what it needs, what it produces, where it breaks and how to debug it.</p>
+      <h1 data-i18n-html="hero.title"></h1>
+      <p class="muted" data-i18n="hero.sub"></p>
       <ol class="stage-strip" id="stage-strip"></ol>
     </section>
 
@@ -31,18 +42,18 @@
     <section class="view" id="view-workflow">
       <div class="toolbar">
         <label class="field">
-          <span>Task</span>
+          <span data-i18n="wf.task">Task</span>
           <select id="task-select"></select>
         </label>
         <label class="switch">
           <input type="checkbox" id="engineer-toggle" />
           <span class="switch-track"><span class="switch-thumb"></span></span>
-          <span>Engineer Mode</span>
+          <span data-i18n="wf.engineer">Engineer Mode</span>
         </label>
         <div class="legend">
-          <span class="badge core">core</span>
-          <span class="badge optional">optional</span>
-          <span class="badge skip">skip</span>
+          <span class="badge core" data-i18n="status.core">core</span>
+          <span class="badge optional" data-i18n="status.optional">optional</span>
+          <span class="badge skip" data-i18n="status.skip">skip</span>
         </div>
       </div>
 
@@ -54,45 +65,45 @@
 
     <!-- ============ BUDGET ============ -->
     <section class="view" id="view-budget" hidden>
-      <h2>Robot Deployment Budget</h2>
-      <p class="muted">Enter your measured per-stage latency. Defaults are <strong>example values</strong>, not benchmarks — replace them with your own p99 numbers.</p>
+      <h2 data-i18n="b.title"></h2>
+      <p class="muted" data-i18n-html="b.sub"></p>
 
       <div class="budget-grid">
         <div class="card">
-          <h3>Pipeline latency (ms)</h3>
+          <h3 data-i18n="b.inputs"></h3>
           <div id="budget-inputs" class="budget-inputs"></div>
           <div class="budget-row">
             <label class="field">
-              <span>Target control frequency (Hz)</span>
+              <span data-i18n="b.target"></span>
               <input type="number" id="budget-target" min="1" max="1000" step="1" value="50" />
             </label>
             <label class="field">
-              <span>Execution model</span>
+              <span data-i18n="b.mode"></span>
               <select id="budget-mode">
-                <option value="sequential">Sequential (one frame at a time)</option>
-                <option value="pipelined">Pipelined (stages overlap)</option>
+                <option value="sequential" data-i18n="b.seq"></option>
+                <option value="pipelined" data-i18n="b.pipe"></option>
               </select>
             </label>
           </div>
           <div class="budget-row">
             <label class="field grow">
-              <span>What-if: inference speed-up after optimisation <output id="speedup-out">1.0×</output></span>
+              <span><span data-i18n="b.speedup"></span> <output id="speedup-out">1×</output></span>
               <input type="range" id="budget-speedup" min="1" max="6" step="0.1" value="1" />
             </label>
           </div>
-          <p class="note">Speed-up is <em>your assumption</em> (e.g. from a TensorRT FP16 measurement). It is applied to the “Model inference” row only.</p>
+          <p class="note" data-i18n-html="b.speedupNote"></p>
         </div>
 
         <div class="card">
-          <h3>Result</h3>
+          <h3 data-i18n="b.result"></h3>
           <div id="budget-result"></div>
-          <h4>Potential bottlenecks</h4>
+          <h4 data-i18n="b.bottlenecks"></h4>
           <div id="budget-bars" class="bars"></div>
         </div>
       </div>
 
       <div class="card">
-        <h3>Possible NVIDIA optimisation path</h3>
+        <h3 data-i18n="b.optPath"></h3>
         <div id="opt-path" class="opt-path"></div>
         <div id="opt-advice"></div>
       </div>
@@ -100,8 +111,8 @@
 
     <!-- ============ SIM2REAL ============ -->
     <section class="view" id="view-sim2real" hidden>
-      <h2>My humanoid policy works in simulation but fails on the robot. Why?</h2>
-      <p class="muted">Pick the symptom you see. Then pick a candidate cause for the SIM vs. REAL picture, how to check it, and how to fix it.</p>
+      <h2 data-i18n="s.title"></h2>
+      <p class="muted" data-i18n="s.sub"></p>
       <div class="symptoms" id="symptoms"></div>
       <div class="s2r-grid">
         <div class="causes" id="causes"></div>
@@ -112,21 +123,19 @@
     <!-- ============ AI (placeholder) ============ -->
     <section class="view" id="view-ai" hidden>
       <div class="card soon">
-        <h2>Design with AI — coming soon</h2>
-        <p>An “AI Physical AI Architect”: describe your robot, sensors, compute, task and data, and get a structured workflow recommendation with trade-offs (why not RL only, why simulation, why GR00T, where the bottleneck is, what to benchmark, what can fail in deployment).</p>
-        <p class="muted">Planned design: bring-your-own API key kept in the browser session only, or a small proxy. Nothing is sent anywhere from this page today.</p>
+        <h2 data-i18n="ai.title"></h2>
+        <p data-i18n="ai.p1"></p>
+        <p class="muted" data-i18n="ai.p2"></p>
       </div>
     </section>
   </main>
 
   <footer class="site-footer">
     <div class="wrap">
-      <p>Built by <a href="https://github.com/ImChong">Chong Liu</a> ·
-        <a href="https://github.com/ImChong/Physical_AI_Workflow_Explorer">Source on GitHub</a> ·
-        Independent project, not affiliated with or endorsed by NVIDIA. Product names belong to their owners.
-        Values labelled “example” are illustrative and robot dependent.</p>
+      <p data-i18n-html="footer.main"></p>
       <p class="related">
-        Related: <a href="https://imchong.github.io/Robotics_Notebooks/">Robotics Notebooks</a> ·
+        <span data-i18n="footer.related">Related:</span>
+        <a href="https://imchong.github.io/Robotics_Notebooks/">Robotics Notebooks</a> ·
         <a href="https://imchong.github.io/Robot_Description_Gallery_Online/">Robot Description Gallery</a> ·
         <a href="https://imchong.github.io/Robot_Retarget_Online/">Robot Retarget Online</a> ·
         <a href="https://imchong.github.io/Robot_Learning_Sim2Sim_Online/">Sim2Sim Online</a> ·
@@ -138,6 +147,8 @@
 
   <script src="assets/js/workflow-data.js"></script>
   <script src="assets/js/sim2real-data.js"></script>
+  <script src="assets/js/i18n.js"></script>
+  <script src="assets/js/content-zh.js"></script>
   <script src="assets/js/app.js"></script>
 </body>
 </html>

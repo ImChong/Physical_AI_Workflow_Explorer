@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const { NODES, LAYOUT, STAGES, TASKS, SOURCES, SYMPTOMS, CAUSES } = window.PAWE;
+  const { NODES, LAYOUT, STAGES, TASKS, SOURCES, SYMPTOMS, CAUSES, UI, ZH } = window.PAWE;
 
   /* ---------- helpers ---------- */
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -29,7 +29,17 @@
     },
   };
 
+  /* ---------- language ---------- */
+  function initialLang() {
+    const q = new URLSearchParams(location.search).get("lang");
+    if (q === "en" || q === "zh") return q;
+    const saved = store.get("lang", null);
+    if (saved === "en" || saved === "zh") return saved;
+    return /^zh/i.test(navigator.language || "") ? "zh" : "en";
+  }
+
   const state = {
+    lang: initialLang(),
     taskId: store.get("task", TASKS[0].id),
     engineer: store.get("engineer", false),
     node: "gr00t",
@@ -39,12 +49,73 @@
   };
   if (!TASKS.some((t) => t.id === state.taskId)) state.taskId = TASKS[0].id;
 
+  const zh = () => state.lang === "zh";
+  /* UI string lookup with {param} substitution; falls back to English. */
+  const tr = (key, params) => {
+    let s = (UI[state.lang] && UI[state.lang][key]) ?? UI.en[key] ?? key;
+    if (params && typeof s === "string") s = s.replace(/\{(\w+)\}/g, (_, k) => (k in params ? params[k] : `{${k}}`));
+    return s;
+  };
+  /* Content lookup: shallow-merge the Chinese override over the English object. */
+  const node = (id) => (zh() && ZH.nodes[id] ? { ...NODES[id], ...ZH.nodes[id] } : NODES[id]);
+  const cause = (id) => (zh() && ZH.causes[id] ? { ...CAUSES[id], ...ZH.causes[id] } : CAUSES[id]);
+  const symptom = (s) => (zh() && ZH.symptoms[s.id] ? { ...s, ...ZH.symptoms[s.id] } : s);
+  const stageLabel = (id) => (zh() && ZH.stages[id]) || (STAGES.find((s) => s.id === id) || {}).label || id;
+  const taskLabel = (t) => (zh() && ZH.tasks[t.id] ? ZH.tasks[t.id].label : t.label);
   const currentTask = () => TASKS.find((t) => t.id === state.taskId);
-  const stageLabel = (id) => (STAGES.find((s) => s.id === id) || {}).label || id;
+  const taskNode = (id) => {
+    const [status, note] = currentTask().nodes[id] || ["core", ""];
+    const zhNote = zh() && ZH.tasks[state.taskId] ? ZH.tasks[state.taskId].notes[id] : null;
+    return [status, zhNote || note];
+  };
+  /* zh overrides list tool names as plain strings; English keeps {name, src}. */
+  const toolName = (id, n, i) => (typeof n.tools[i] === "string" ? n.tools[i] : NODES[id].tools[i].name);
+
   const srcLink = (key) => {
     const s = SOURCES[key];
     return s ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.label)}</a>` : "";
   };
+
+  /* ---------- theme ---------- */
+  const mq = window.matchMedia("(prefers-color-scheme: dark)");
+  const effectiveTheme = () => document.documentElement.dataset.theme || (mq.matches ? "dark" : "light");
+  function updateThemeButton() {
+    const dark = effectiveTheme() === "dark";
+    const btn = $("#theme-toggle");
+    btn.textContent = dark ? "☀" : "☾";
+    const label = tr(dark ? "toggle.themeToLight" : "toggle.themeToDark");
+    btn.setAttribute("aria-label", label);
+    btn.title = label;
+  }
+  function initTheme() {
+    $("#theme-toggle").addEventListener("click", () => {
+      const next = effectiveTheme() === "dark" ? "light" : "dark";
+      document.documentElement.dataset.theme = next;
+      store.set("theme", next);
+      updateThemeButton();
+    });
+    mq.addEventListener("change", updateThemeButton);
+  }
+
+  /* ---------- static text ---------- */
+  function applyStaticText() {
+    document.documentElement.lang = zh() ? "zh-CN" : "en";
+    document.querySelectorAll("[data-i18n]").forEach((el) => (el.textContent = tr(el.dataset.i18n)));
+    document.querySelectorAll("[data-i18n-html]").forEach((el) => (el.innerHTML = tr(el.dataset.i18nHtml)));
+    const lb = $("#lang-toggle");
+    lb.textContent = tr("toggle.lang");
+    lb.title = tr("toggle.langTitle");
+    lb.setAttribute("aria-label", tr("toggle.langTitle"));
+    updateThemeButton();
+  }
+
+  function initLang() {
+    $("#lang-toggle").addEventListener("click", () => {
+      state.lang = zh() ? "en" : "zh";
+      store.set("lang", state.lang);
+      renderAll();
+    });
+  }
 
   /* ---------- router ---------- */
   function route(e) {
@@ -72,19 +143,31 @@
     }
   }
 
+  function renderAll() {
+    applyStaticText();
+    renderStageStrip();
+    renderTaskOptions();
+    budgetBuilt = false;
+    route();
+  }
+
   /* ---------- stage strip ---------- */
   function renderStageStrip() {
     $("#stage-strip").innerHTML = STAGES.map((s) => {
       const first = Object.keys(NODES).find((id) => NODES[id].stage === s.id);
-      return `<li><a class="stage-chip st-${s.id}" href="#/workflow/${first}">${esc(s.label)}</a></li>`;
+      return `<li><a class="stage-chip st-${s.id}" href="#/workflow/${first}">${esc(stageLabel(s.id))}</a></li>`;
     }).join("");
   }
 
   /* ---------- workflow ---------- */
-  function renderTaskSelect() {
+  function renderTaskOptions() {
     const sel = $("#task-select");
-    sel.innerHTML = TASKS.map((t) => `<option value="${t.id}">${esc(t.label)}</option>`).join("");
+    sel.innerHTML = TASKS.map((t) => `<option value="${t.id}">${esc(taskLabel(t))}</option>`).join("");
     sel.value = state.taskId;
+  }
+
+  function initWorkflowControls() {
+    const sel = $("#task-select");
     sel.addEventListener("change", () => {
       state.taskId = sel.value;
       store.set("task", state.taskId);
@@ -104,18 +187,17 @@
   }
 
   function renderPipeline() {
-    const task = currentTask();
     const rows = LAYOUT.map((row, i) => {
       const cells = row
         .map((id) => {
-          const n = NODES[id];
-          const [status] = task.nodes[id] || ["core"];
+          const n = node(id);
+          const [status] = taskNode(id);
           const active = id === state.node ? " active" : "";
           return `<a role="listitem" class="node st-${n.stage} is-${status}${active}" href="#/workflow/${id}">
             <span class="node-stage">${esc(stageLabel(n.stage))}</span>
             <span class="node-title">${esc(n.title)}</span>
             <span class="node-tech">${esc(n.tech)}</span>
-            <span class="badge ${status}">${status}</span>
+            <span class="badge ${status}">${esc(tr("status." + status))}</span>
           </a>`;
         })
         .join("");
@@ -132,9 +214,8 @@
 
   function renderDetail() {
     const id = state.node;
-    const n = NODES[id];
-    const task = currentTask();
-    const [status, note] = task.nodes[id] || ["core", ""];
+    const n = node(id);
+    const [status, note] = taskNode(id);
     const order = LAYOUT.flat();
     const idx = order.indexOf(id);
     const prev = order[idx - 1];
@@ -147,42 +228,42 @@
         <p class="d-tech">${esc(n.tech)}</p>
       </div>
       <div class="task-note is-${status}">
-        <span class="badge ${status}">${status} for this task</span>
+        <span class="badge ${status}">${esc(tr("wf.forTask", { status: tr("status." + status) }))}</span>
         <p>${esc(note)}</p>
       </div>`;
 
-    html += section("What", `<p>${esc(n.what)}</p>`);
-    html += section("Why customers need it", `<p>${esc(n.why)}</p>`);
-    html += section("When do you need it?", `<p>${esc(n.whenNeeded)}</p>`);
+    html += section(esc(tr("sec.what")), `<p>${esc(n.what)}</p>`);
+    html += section(esc(tr("sec.why")), `<p>${esc(n.why)}</p>`);
+    html += section(esc(tr("sec.when")), `<p>${esc(n.whenNeeded)}</p>`);
     if (n.diagram) html += `<pre class="diagram">${esc(n.diagram)}</pre>`;
     if (state.engineer) {
       if (n.engineerWidget === "chunk") html += chunkWidgetHTML();
-      else if (n.engineer) html += `<div class="eng">${section("Engineer · " + esc(n.engineer.title), list(n.engineer.body))}</div>`;
-      else html += `<div class="eng"><p class="muted">No engineer view for this stage yet.</p></div>`;
+      else if (n.engineer) html += `<div class="eng">${section(esc(tr("eng.prefix") + n.engineer.title), list(n.engineer.body))}</div>`;
+      else html += `<div class="eng"><p class="muted">${esc(tr("eng.none"))}</p></div>`;
     } else if (n.engineer || n.engineerWidget) {
-      html += `<p class="hint">Turn on <strong>Engineer Mode</strong> for numbers, timing and trade-offs.</p>`;
+      html += `<p class="hint">${tr("eng.hint")}</p>`;
     }
 
-    html += `<div class="io">${section("Input", list(n.input))}${section("Output", list(n.output))}</div>`;
-    html += section("Bottleneck", list(n.bottleneck));
-    html += section("Debug", list(n.debug));
-    if (n.tools.length) {
+    html += `<div class="io">${section(esc(tr("sec.input")), list(n.input))}${section(esc(tr("sec.output")), list(n.output))}</div>`;
+    html += section(esc(tr("sec.bottleneck")), list(n.bottleneck));
+    html += section(esc(tr("sec.debug")), list(n.debug));
+    const baseTools = NODES[id].tools;
+    if (baseTools.length) {
       html += section(
-        "NVIDIA tool",
-        `<ul class="tools">${n.tools
-          .map((t) => `<li><a href="${esc(SOURCES[t.src].url)}" target="_blank" rel="noopener">${esc(t.name)}</a></li>`)
+        esc(tr("sec.tool")),
+        `<ul class="tools">${baseTools
+          .map((t, i) => `<li><a href="${esc(SOURCES[t.src].url)}" target="_blank" rel="noopener">${esc(toolName(id, n, i))}</a></li>`)
           .join("")}</ul>`
       );
     }
 
-    html += section("Sources", `<ul class="sources">${n.sources.map((s) => `<li>${srcLink(s)}</li>`).join("")}</ul>`);
+    html += section(esc(tr("sec.sources")), `<ul class="sources">${n.sources.map((s) => `<li>${srcLink(s)}</li>`).join("")}</ul>`);
     html += `<nav class="d-nav">
-      ${prev ? `<a href="#/workflow/${prev}">← ${esc(NODES[prev].title)}</a>` : "<span></span>"}
-      ${next ? `<a href="#/workflow/${next}">${esc(NODES[next].title)} →</a>` : "<span></span>"}
+      ${prev ? `<a href="#/workflow/${prev}">← ${esc(node(prev).title)}</a>` : "<span></span>"}
+      ${next ? `<a href="#/workflow/${next}">${esc(node(next).title)} →</a>` : "<span></span>"}
     </nav>`;
 
-    const d = $("#detail");
-    d.innerHTML = html;
+    $("#detail").innerHTML = html;
     if (state.engineer && n.engineerWidget === "chunk") bindChunkWidget();
   }
 
@@ -191,28 +272,26 @@
     const c = state.chunk;
     const opt = (vals, cur) => vals.map((v) => `<option value="${v}"${v === cur ? " selected" : ""}>${v} Hz</option>`).join("");
     return `<div class="eng">
-      <h4>Engineer · Action chunk & control hierarchy</h4>
-      <p class="tag">Typical architecture · Example values — robot dependent</p>
+      <h4>${esc(tr("cw.title"))}</h4>
+      <p class="tag">${esc(tr("cw.tag"))}</p>
       <pre class="diagram" id="cw-diagram"></pre>
       <label class="field grow">
-        <span>VLA inference frequency <output id="cw-fv-out"></output></span>
+        <span>${esc(tr("cw.fv"))} <output id="cw-fv-out"></output></span>
         <input type="range" id="cw-fv" min="5" max="50" step="1" value="${c.fv}" />
         <span class="range-ends"><span>5 Hz</span><span>50 Hz</span></span>
       </label>
       <div class="cw-grid">
-        <label class="field"><span>Chunk length H (actions)</span>
+        <label class="field"><span>${esc(tr("cw.H"))}</span>
           <input type="number" id="cw-H" min="1" max="128" value="${c.H}" /></label>
-        <label class="field"><span>Chunk step rate</span>
+        <label class="field"><span>${esc(tr("cw.fa"))}</span>
           <select id="cw-fa">${opt([15, 20, 30, 50, 100], c.fa)}</select></label>
-        <label class="field"><span>Whole-body / low-level controller</span>
+        <label class="field"><span>${esc(tr("cw.fc"))}</span>
           <select id="cw-fc">${opt([50, 100, 200, 500], c.fc)}</select></label>
-        <label class="field"><span>Joint PD / actuator loop</span>
+        <label class="field"><span>${esc(tr("cw.fpd"))}</span>
           <select id="cw-fpd">${opt([500, 1000, 2000], c.fpd)}</select></label>
       </div>
       <div id="cw-out" class="cw-out"></div>
-      <p class="note">Reference: GR00T N1.7 raised the action horizon from 16 to 40 steps and exposes an
-        <code>--execution-horizon</code> flag (how many predicted actions are executed per policy call) —
-        ${srcLink("gr00tRepo")}. Chunk step rate = the dataset's control rate.</p>
+      <p class="note">${tr("cw.note", { src: srcLink("gr00tRepo") })}</p>
     </div>`;
   }
 
@@ -240,26 +319,26 @@
         `        ↓\n` +
         `PD / actuator controller     ${fpd} Hz`;
 
-      let warn = "";
+      let warn;
       if (chunkSpan < period) {
-        warn = `<p class="warn">⚠ The chunk covers only ${fmt(chunkSpan, 0)} ms but the next inference arrives after ${fmt(period, 0)} ms — the controller runs out of actions and must hold or extrapolate. Increase H, lower the chunk step rate, or raise the VLA frequency.</p>`;
+        warn = `<p class="warn">${esc(tr("cw.warn", { span: fmt(chunkSpan, 0), period: fmt(period, 0) }))}</p>`;
       } else if (chunkSpan < 2 * period) {
-        warn = `<p class="caution">Chunk covers less than two inference periods — little slack if one inference is late (p99 latency).</p>`;
+        warn = `<p class="caution">${esc(tr("cw.caution"))}</p>`;
       } else {
-        warn = `<p class="ok">✓ Each chunk covers ${fmt(chunkSpan / period, 1)} inference periods — slack for late inferences, and room to execute only the first part of each chunk before re-planning.</p>`;
+        warn = `<p class="ok">${esc(tr("cw.ok", { n: fmt(chunkSpan / period, 1) }))}</p>`;
       }
 
       $("#cw-out").innerHTML = `
         <dl class="kv">
-          <dt>Inference period</dt><dd>${fmt(period)} ms</dd>
-          <dt>Max synchronous inference latency</dt><dd>&lt; ${fmt(period)} ms</dd>
-          <dt>Low-level cycles between VLA updates</dt><dd>≈ ${fmt(lowPerUpdate)}</dd>
-          <dt>Chunk actions consumed per update</dt><dd>≈ ${fmt(consumed)} of ${H}</dd>
-          <dt>Low-level cycles per chunk step</dt><dd>${fmt(interp)}${interp > 1 ? " (interpolate between chunk actions)" : ""}</dd>
-          <dt>PD cycles per low-level cycle</dt><dd>${fmt(pdPerLow)}</dd>
+          <dt>${esc(tr("cw.period"))}</dt><dd>${fmt(period)} ms</dd>
+          <dt>${esc(tr("cw.maxLat"))}</dt><dd>&lt; ${fmt(period)} ms</dd>
+          <dt>${esc(tr("cw.lowPer"))}</dt><dd>≈ ${fmt(lowPerUpdate)}</dd>
+          <dt>${esc(tr("cw.consumed"))}</dt><dd>≈ ${fmt(consumed)} ${esc(tr("cw.of"))} ${H}</dd>
+          <dt>${esc(tr("cw.interp"))}</dt><dd>${fmt(interp)}${interp > 1 ? esc(tr("cw.interpNote")) : ""}</dd>
+          <dt>${esc(tr("cw.pdPer"))}</dt><dd>${fmt(pdPerLow)}</dd>
         </dl>
         ${warn}
-        <a class="btn" href="#/budget" id="cw-to-budget">Use ${fv} Hz as deployment budget target →</a>`;
+        <a class="btn" href="#/budget" id="cw-to-budget">${esc(tr("cw.toBudget", { fv }))}</a>`;
       $("#cw-to-budget").addEventListener("click", () => {
         budget.target = fv;
       });
@@ -271,78 +350,62 @@
   /* ---------- deployment budget ---------- */
   const budget = {
     rows: [
-      { id: "camera", label: "Camera pipeline", ms: 6 },
-      { id: "prepost", label: "Pre/post processing", ms: 3 },
-      { id: "inference", label: "Model inference", ms: 12 },
-      { id: "ros", label: "ROS transport", ms: 2 },
-      { id: "other", label: "Other (control, logging)", ms: 0 },
+      { id: "camera", ms: 6 },
+      { id: "prepost", ms: 3 },
+      { id: "inference", ms: 12 },
+      { id: "ros", ms: 2 },
+      { id: "other", ms: 0 },
     ],
     target: 50,
     mode: "sequential",
     speedup: 1,
   };
-
-  const ADVICE = {
-    camera: [
-      "Lower resolution / crop to the region the policy needs",
-      "Hardware-accelerated capture & ISP on Jetson; avoid CPU colour conversion",
-      "Check exposure time — long exposure adds latency and motion blur",
-    ],
-    prepost: [
-      "Move resize / normalise to the GPU (e.g. Isaac ROS image processing)",
-      "Avoid CPU ↔ GPU copies between pre-processing and inference",
-      "Fuse pre-processing into the TensorRT engine where possible",
-    ],
-    inference: [
-      "Export PyTorch → ONNX → TensorRT; try FP16, then INT8 / FP8 / FP4 with accuracy checks",
-      "For diffusion / flow action heads: fewer denoising steps trade quality for latency",
-      "Execute more of each action chunk per call so inference can run less often",
-    ],
-    ros: [
-      "Zero-copy GPU transport between nodes (Isaac ROS: NITROS → rosidl::Buffer)",
-      "Composable nodes / intra-process communication",
-      "Tune QoS and executors; avoid large-message serialisation",
-    ],
-    other: ["Profile with Nsight Systems to find hidden sync points and logging overhead"],
-  };
+  const rowLabel = (id) => tr("b.rows")[id];
 
   const OPT_PATH = [
-    { id: "pt", label: "PyTorch", note: "Research baseline; easiest to debug, slowest to deploy." },
-    { id: "onnx", label: "ONNX", note: "Framework-neutral graph; fix unsupported ops and dynamic shapes here." },
-    { id: "fp16", label: "TensorRT FP16", note: "Usually the first big win with small accuracy risk — validate outputs." },
-    { id: "int8", label: "TensorRT INT8 / FP8 / FP4", note: "Needs calibration or quantisation-aware steps; re-run task evaluation." },
-    { id: "thor", label: "Jetson Thor", note: "Build the engine on the target device; benchmark in the real power mode." },
+    { id: "pt", label: "PyTorch" },
+    { id: "onnx", label: "ONNX" },
+    { id: "fp16", label: "TensorRT FP16" },
+    { id: "int8", label: "TensorRT INT8 / FP8 / FP4" },
+    { id: "thor", label: "Jetson Thor" },
   ];
 
   let budgetBuilt = false;
+  function initBudgetControls() {
+    $("#budget-inputs").addEventListener("input", (e) => {
+      const r = budget.rows.find((x) => x.id === e.target.dataset.row);
+      if (r) r.ms = Math.max(0, Number(e.target.value) || 0);
+      computeBudget();
+    });
+    $("#budget-target").addEventListener("input", (e) => {
+      budget.target = Math.max(1, Number(e.target.value) || 1);
+      computeBudget();
+    });
+    $("#budget-mode").addEventListener("change", (e) => {
+      budget.mode = e.target.value;
+      computeBudget();
+    });
+    $("#budget-speedup").addEventListener("input", (e) => {
+      budget.speedup = Number(e.target.value) || 1;
+      computeBudget();
+    });
+  }
+
   function renderBudget() {
     if (!budgetBuilt) {
       $("#budget-inputs").innerHTML = budget.rows
         .map(
-          (r) => `<label class="field inline"><span>${esc(r.label)}</span>
+          (r) => `<label class="field inline"><span>${esc(rowLabel(r.id))}</span>
             <input type="number" min="0" step="0.5" data-row="${r.id}" value="${r.ms}" /><span class="unit">ms</span></label>`
         )
         .join("");
-      $("#budget-inputs").addEventListener("input", (e) => {
-        const r = budget.rows.find((x) => x.id === e.target.dataset.row);
-        if (r) r.ms = Math.max(0, Number(e.target.value) || 0);
-        computeBudget();
-      });
-      $("#budget-target").addEventListener("input", (e) => {
-        budget.target = Math.max(1, Number(e.target.value) || 1);
-        computeBudget();
-      });
-      $("#budget-mode").addEventListener("change", (e) => {
-        budget.mode = e.target.value;
-        computeBudget();
-      });
-      $("#budget-speedup").addEventListener("input", (e) => {
-        budget.speedup = Number(e.target.value) || 1;
-        computeBudget();
-      });
+      const notes = tr("b.opt");
       $("#opt-path").innerHTML = OPT_PATH.map(
-        (s, i) => `${i ? '<span class="opt-arrow">→</span>' : ""}<div class="opt-step" title="${esc(s.note)}"><strong>${esc(s.label)}</strong><span>${esc(s.note)}</span></div>`
+        (s, i) =>
+          `${i ? '<span class="opt-arrow">→</span>' : ""}<div class="opt-step" title="${esc(notes[s.id])}"><strong>${esc(s.label)}</strong><span>${esc(notes[s.id])}</span></div>`
       ).join("");
+      $("#budget-mode").value = budget.mode;
+      $("#budget-speedup").value = budget.speedup;
       budgetBuilt = true;
     }
     $("#budget-target").value = budget.target;
@@ -350,7 +413,7 @@
   }
 
   function computeBudget() {
-    const eff = budget.rows.map((r) => ({ ...r, eff: r.id === "inference" ? r.ms / budget.speedup : r.ms }));
+    const eff = budget.rows.map((r) => ({ ...r, label: rowLabel(r.id), eff: r.id === "inference" ? r.ms / budget.speedup : r.ms }));
     const total = eff.reduce((a, r) => a + r.eff, 0);
     const slowest = eff.reduce((a, r) => (r.eff > a.eff ? r : a), eff[0]);
     const cycle = budget.mode === "pipelined" ? slowest.eff : total;
@@ -361,74 +424,71 @@
 
     const status =
       over > 0
-        ? `<p class="warn big">⚠ Over budget by ${fmt(over)} ms</p>`
-        : `<p class="ok big">✓ Within budget — ${fmt(-over)} ms headroom</p>`;
+        ? `<p class="warn big">${esc(tr("b.over", { ms: fmt(over) }))}</p>`
+        : `<p class="ok big">${esc(tr("b.within", { ms: fmt(-over) }))}</p>`;
 
     $("#budget-result").innerHTML = `
       <dl class="kv">
-        <dt>End-to-end latency (sensor → action)</dt><dd>${fmt(total)} ms</dd>
-        <dt>${budget.mode === "pipelined" ? "Cycle time (slowest stage)" : "Cycle time"}</dt><dd>${fmt(cycle)} ms</dd>
-        <dt>Maximum theoretical frequency</dt><dd>${Number.isFinite(maxHz) ? fmt(maxHz) + " Hz" : "∞"}</dd>
-        <dt>Target control frequency</dt><dd>${fmt(budget.target)} Hz</dd>
-        <dt>Budget per cycle</dt><dd>${fmt(budgetMs)} ms</dd>
+        <dt>${esc(tr("b.e2e"))}</dt><dd>${fmt(total)} ms</dd>
+        <dt>${esc(tr(budget.mode === "pipelined" ? "b.cycleSlowest" : "b.cycle"))}</dt><dd>${fmt(cycle)} ms</dd>
+        <dt>${esc(tr("b.maxHz"))}</dt><dd>${Number.isFinite(maxHz) ? fmt(maxHz) + " Hz" : "∞"}</dd>
+        <dt>${esc(tr("b.targetHz"))}</dt><dd>${fmt(budget.target)} Hz</dd>
+        <dt>${esc(tr("b.budget"))}</dt><dd>${fmt(budgetMs)} ms</dd>
       </dl>
       ${status}
-      ${
-        budget.mode === "pipelined"
-          ? `<p class="note">Pipelining raises throughput, but each action is still based on an observation ${fmt(total)} ms old — the policy must tolerate that delay (see Sim2Real → Observation delay).</p>`
-          : ""
-      }`;
+      ${budget.mode === "pipelined" ? `<p class="note">${esc(tr("b.pipeNote", { ms: fmt(total) }))}</p>` : ""}`;
 
     const max = Math.max(...eff.map((r) => r.eff), budgetMs, 1e-9);
     $("#budget-bars").innerHTML =
       eff
         .map((r) => {
           const w = (r.eff / max) * 100;
-          const mark = r.id === slowest.id && r.eff > 0 ? " ← largest" : "";
+          const mark = r.id === slowest.id && r.eff > 0 ? " " + tr("b.largest") : "";
           return `<div class="bar-row${mark ? " largest" : ""}">
             <span class="bar-label">${esc(r.label)}</span>
             <span class="bar"><span style="width:${w}%"></span></span>
-            <span class="bar-val">${fmt(r.eff)} ms${mark}</span>
+            <span class="bar-val">${fmt(r.eff)} ms${esc(mark)}</span>
           </div>`;
         })
         .join("") +
-      `<div class="bar-row budget-line"><span class="bar-label">Budget</span><span class="bar"><span style="width:${(budgetMs / max) * 100}%"></span></span><span class="bar-val">${fmt(budgetMs)} ms</span></div>`;
+      `<div class="bar-row budget-line"><span class="bar-label">${esc(tr("b.budgetBar"))}</span><span class="bar"><span style="width:${(budgetMs / max) * 100}%"></span></span><span class="bar-val">${fmt(budgetMs)} ms</span></div>`;
 
     $("#opt-advice").innerHTML =
       slowest.eff > 0
-        ? `<h4>Largest contributor: ${esc(slowest.label)}</h4>${list(ADVICE[slowest.id])}
-           <p class="note">Suggestions are general engineering practice. Measure p99 latency on the target device before and after each change.</p>`
+        ? `<h4>${esc(tr("b.largestTitle", { name: slowest.label }))}</h4>${list(tr("b.advice")[slowest.id])}
+           <p class="note">${esc(tr("b.adviceNote"))}</p>`
         : "";
     document.querySelectorAll(".opt-step").forEach((s) => s.classList.toggle("dim", slowest.id !== "inference"));
   }
 
   /* ---------- sim2real ---------- */
   function renderSim2Real() {
-    $("#symptoms").innerHTML = SYMPTOMS.map(
-      (s) => `<a class="symptom${s.id === state.symptom ? " active" : ""}" href="#/sim2real/${s.id}">
-        <strong>${esc(s.label)}</strong><span>${esc(s.hint)}</span></a>`
-    ).join("");
+    $("#symptoms").innerHTML = SYMPTOMS.map((raw) => {
+      const s = symptom(raw);
+      return `<a class="symptom${s.id === state.symptom ? " active" : ""}" href="#/sim2real/${s.id}">
+        <strong>${esc(s.label)}</strong><span>${esc(s.hint)}</span></a>`;
+    }).join("");
 
     const sym = SYMPTOMS.find((s) => s.id === state.symptom);
     if (!sym) {
-      $("#causes").innerHTML = `<p class="muted">↑ Select a symptom to see potential causes.</p>`;
+      $("#causes").innerHTML = `<p class="muted">${esc(tr("s.pickSymptom"))}</p>`;
       $("#cause-detail").innerHTML = "";
       return;
     }
     $("#causes").innerHTML =
-      `<h3>Potential causes</h3>` +
+      `<h3>${esc(tr("s.causes"))}</h3>` +
       sym.causes
         .map(
           (cid, i) => `<a class="cause${cid === state.cause ? " active" : ""}" href="#/sim2real/${sym.id}/${cid}">
-          <span class="num">${CIRCLED[i] || i + 1}</span> ${esc(CAUSES[cid].title)}</a>`
+          <span class="num">${CIRCLED[i] || i + 1}</span> ${esc(cause(cid).title)}</a>`
         )
         .join("");
 
-    const c = CAUSES[state.cause];
-    if (!c) {
-      $("#cause-detail").innerHTML = `<p class="muted">Select a cause to see the SIM vs. REAL picture.</p>`;
+    if (!state.cause) {
+      $("#cause-detail").innerHTML = `<p class="muted">${esc(tr("s.pickCause"))}</p>`;
       return;
     }
+    const c = cause(state.cause);
     $("#cause-detail").innerHTML = `
       <h3>${esc(c.title)}</h3>
       <p>${esc(c.explain)}</p>
@@ -436,15 +496,17 @@
         <div><h4>SIM</h4><pre class="diagram">${esc(c.sim)}</pre></div>
         <div><h4>REAL</h4><pre class="diagram real">${esc(c.real)}</pre></div>
       </div>
-      ${section("How to check", list(c.check))}
-      ${section("Fix", list(c.fix))}
-      ${c.dr ? section("Domain randomisation during training (example ranges)", `<pre class="code">${esc(c.dr)}</pre>`) : ""}
-      ${c.link ? `<p><a class="btn" href="${esc(c.link.url)}" target="_blank" rel="noopener">${esc(c.link.label)} ↗</a></p>` : ""}`;
+      ${section(esc(tr("s.check")), list(c.check))}
+      ${section(esc(tr("s.fix")), list(c.fix))}
+      ${c.dr ? section(esc(tr("s.dr")), `<pre class="code">${esc(c.dr)}</pre>`) : ""}
+      ${c.link ? `<p><a class="btn" href="${esc(c.link.url)}" target="_blank" rel="noopener">${esc(c.linkLabel || c.link.label)} ↗</a></p>` : ""}`;
   }
 
   /* ---------- init ---------- */
-  renderStageStrip();
-  renderTaskSelect();
+  initTheme();
+  initLang();
+  initWorkflowControls();
+  initBudgetControls();
+  renderAll();
   window.addEventListener("hashchange", route);
-  route();
 })();
