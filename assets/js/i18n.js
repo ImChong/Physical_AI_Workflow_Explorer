@@ -1,0 +1,293 @@
+/*
+ * UI strings (en / zh). Content (stages, tasks, Sim2Real causes) is translated in content-zh.js.
+ * Placeholders use {name} and are filled by tr(key, params).
+ */
+window.PAWE = window.PAWE || {};
+
+PAWE.UI = {
+  en: {
+    "tab.workflow": "Explore Workflow",
+    "tab.budget": "Deployment Budget",
+    "tab.sim2real": "Debug Sim2Real",
+    "tab.ai": "Design with AI",
+    "tab.soon": "soon",
+    "toggle.lang": "中文",
+    "toggle.langTitle": "切换到中文",
+    "toggle.themeToDark": "Switch to dark mode",
+    "toggle.themeToLight": "Switch to light mode",
+
+    "hero.title":
+      'Explore how a humanoid robot task moves from <span class="hl">data → simulation → robot learning → edge deployment</span>.',
+    "hero.sub":
+      "An interactive engineering guide — not a slide deck. Pick a task, click a stage, and see what it needs, what it produces, where it breaks and how to debug it.",
+
+    "wf.task": "Task",
+    "wf.engineer": "Engineer Mode",
+    "status.core": "core",
+    "status.optional": "optional",
+    "status.skip": "skip",
+    "wf.forTask": "{status} for this task",
+    "sec.what": "What",
+    "sec.why": "Why customers need it",
+    "sec.when": "When do you need it?",
+    "sec.input": "Input",
+    "sec.output": "Output",
+    "sec.bottleneck": "Bottleneck",
+    "sec.debug": "Debug",
+    "sec.tool": "NVIDIA tool",
+    "sec.sources": "Sources",
+    "eng.prefix": "Engineer · ",
+    "eng.none": "No engineer view for this stage yet.",
+    "eng.hint": "Turn on <strong>Engineer Mode</strong> for numbers, timing and trade-offs.",
+
+    "cw.title": "Engineer · Action chunk & control hierarchy",
+    "cw.tag": "Typical architecture · Example values — robot dependent",
+    "cw.fv": "VLA inference frequency",
+    "cw.H": "Chunk length H (actions)",
+    "cw.fa": "Chunk step rate",
+    "cw.fc": "Whole-body / low-level controller",
+    "cw.fpd": "Joint PD / actuator loop",
+    "cw.note":
+      "Reference: GR00T N1.7 raised the action horizon from 16 to 40 steps and exposes an <code>--execution-horizon</code> flag (how many predicted actions are executed per policy call) — {src}. Chunk step rate = the dataset's control rate.",
+    "cw.period": "Inference period",
+    "cw.maxLat": "Max synchronous inference latency",
+    "cw.lowPer": "Low-level cycles between VLA updates",
+    "cw.consumed": "Chunk actions consumed per update",
+    "cw.of": "of",
+    "cw.interp": "Low-level cycles per chunk step",
+    "cw.interpNote": " (interpolate between chunk actions)",
+    "cw.pdPer": "PD cycles per low-level cycle",
+    "cw.warn":
+      "⚠ The chunk covers only {span} ms but the next inference arrives after {period} ms — the controller runs out of actions and must hold or extrapolate. Increase H, lower the chunk step rate, or raise the VLA frequency.",
+    "cw.caution": "Chunk covers less than two inference periods — little slack if one inference is late (p99 latency).",
+    "cw.ok":
+      "✓ Each chunk covers {n} inference periods — slack for late inferences, and room to execute only the first part of each chunk before re-planning.",
+    "cw.toBudget": "Use {fv} Hz as deployment budget target →",
+
+    "b.title": "Robot Deployment Budget",
+    "b.sub":
+      "Enter your measured per-stage latency. Defaults are <strong>example values</strong>, not benchmarks — replace them with your own p99 numbers.",
+    "b.inputs": "Pipeline latency (ms)",
+    "b.target": "Target control frequency (Hz)",
+    "b.mode": "Execution model",
+    "b.seq": "Sequential (one frame at a time)",
+    "b.pipe": "Pipelined (stages overlap)",
+    "b.speedup": "What-if: inference speed-up after optimisation",
+    "b.speedupNote":
+      "Speed-up is <em>your assumption</em> (e.g. from a TensorRT FP16 measurement). It is applied to the “Model inference” row only.",
+    "b.result": "Result",
+    "b.bottlenecks": "Potential bottlenecks",
+    "b.optPath": "Possible NVIDIA optimisation path",
+    "b.e2e": "End-to-end latency (sensor → action)",
+    "b.cycleSlowest": "Cycle time (slowest stage)",
+    "b.cycle": "Cycle time",
+    "b.maxHz": "Maximum theoretical frequency",
+    "b.targetHz": "Target control frequency",
+    "b.budget": "Budget per cycle",
+    "b.over": "⚠ Over budget by {ms} ms",
+    "b.within": "✓ Within budget — {ms} ms headroom",
+    "b.pipeNote":
+      "Pipelining raises throughput, but each action is still based on an observation {ms} ms old — the policy must tolerate that delay (see Sim2Real → Observation delay).",
+    "b.largest": "← largest",
+    "b.budgetBar": "Budget",
+    "b.largestTitle": "Largest contributor: {name}",
+    "b.adviceNote":
+      "Suggestions are general engineering practice. Measure p99 latency on the target device before and after each change.",
+    "b.rows": {
+      camera: "Camera pipeline",
+      prepost: "Pre/post processing",
+      inference: "Model inference",
+      ros: "ROS transport",
+      other: "Other (control, logging)",
+    },
+    "b.advice": {
+      camera: [
+        "Lower resolution / crop to the region the policy needs",
+        "Hardware-accelerated capture & ISP on Jetson; avoid CPU colour conversion",
+        "Check exposure time — long exposure adds latency and motion blur",
+      ],
+      prepost: [
+        "Move resize / normalise to the GPU (e.g. Isaac ROS image processing)",
+        "Avoid CPU ↔ GPU copies between pre-processing and inference",
+        "Fuse pre-processing into the TensorRT engine where possible",
+      ],
+      inference: [
+        "Export PyTorch → ONNX → TensorRT; try FP16, then INT8 / FP8 / FP4 with accuracy checks",
+        "For diffusion / flow action heads: fewer denoising steps trade quality for latency",
+        "Execute more of each action chunk per call so inference can run less often",
+      ],
+      ros: [
+        "Zero-copy GPU transport between nodes (Isaac ROS: NITROS → rosidl::Buffer)",
+        "Composable nodes / intra-process communication",
+        "Tune QoS and executors; avoid large-message serialisation",
+      ],
+      other: ["Profile with Nsight Systems to find hidden sync points and logging overhead"],
+    },
+    "b.opt": {
+      pt: "Research baseline; easiest to debug, slowest to deploy.",
+      onnx: "Framework-neutral graph; fix unsupported ops and dynamic shapes here.",
+      fp16: "Usually the first big win with small accuracy risk — validate outputs.",
+      int8: "Needs calibration or quantisation-aware steps; re-run task evaluation.",
+      thor: "Build the engine on the target device; benchmark in the real power mode.",
+    },
+
+    "s.title": "My humanoid policy works in simulation but fails on the robot. Why?",
+    "s.sub": "Pick the symptom you see. Then pick a candidate cause for the SIM vs. REAL picture, how to check it, and how to fix it.",
+    "s.pickSymptom": "↑ Select a symptom to see potential causes.",
+    "s.causes": "Potential causes",
+    "s.pickCause": "Select a cause to see the SIM vs. REAL picture.",
+    "s.check": "How to check",
+    "s.fix": "Fix",
+    "s.dr": "Domain randomisation during training (example ranges)",
+
+    "ai.title": "Design with AI — coming soon",
+    "ai.p1":
+      "An “AI Physical AI Architect”: describe your robot, sensors, compute, task and data, and get a structured workflow recommendation with trade-offs (why not RL only, why simulation, why GR00T, where the bottleneck is, what to benchmark, what can fail in deployment).",
+    "ai.p2":
+      "Planned design: bring-your-own API key kept in the browser session only, or a small proxy. Nothing is sent anywhere from this page today.",
+
+    "footer.main":
+      'Built by <a href="https://github.com/ImChong">Chong Liu</a> · <a href="https://github.com/ImChong/Physical_AI_Workflow_Explorer">Source on GitHub</a> · Independent project, not affiliated with or endorsed by NVIDIA. Product names belong to their owners. Values labelled “example” are illustrative and robot dependent.',
+    "footer.related": "Related:",
+  },
+
+  zh: {
+    "tab.workflow": "探索工作流",
+    "tab.budget": "部署预算",
+    "tab.sim2real": "Sim2Real 调试",
+    "tab.ai": "AI 架构设计",
+    "tab.soon": "即将推出",
+    "toggle.lang": "EN",
+    "toggle.langTitle": "Switch to English",
+    "toggle.themeToDark": "切换到夜间模式",
+    "toggle.themeToLight": "切换到日间模式",
+
+    "hero.title": '探索一个人形机器人任务如何从<span class="hl">数据 → 仿真 → 机器人学习 → 边缘部署</span>一路落地。',
+    "hero.sub":
+      "一个交互式工程指南，而不是 PPT。选择一个任务，点击任一环节，查看它需要什么、产出什么、容易在哪里出问题，以及如何排查。",
+
+    "wf.task": "任务",
+    "wf.engineer": "工程师模式",
+    "status.core": "核心",
+    "status.optional": "可选",
+    "status.skip": "跳过",
+    "wf.forTask": "该任务：{status}",
+    "sec.what": "是什么",
+    "sec.why": "客户为什么需要",
+    "sec.when": "什么时候需要它？",
+    "sec.input": "输入",
+    "sec.output": "输出",
+    "sec.bottleneck": "常见瓶颈",
+    "sec.debug": "如何排查",
+    "sec.tool": "对应 NVIDIA 工具",
+    "sec.sources": "参考来源",
+    "eng.prefix": "工程视角 · ",
+    "eng.none": "该环节暂无工程视角内容。",
+    "eng.hint": "打开 <strong>工程师模式</strong> 查看数值、时序与取舍。",
+
+    "cw.title": "工程视角 · Action chunk 与控制层级",
+    "cw.tag": "典型架构 · 示例数值 — 取决于具体机器人",
+    "cw.fv": "VLA 推理频率",
+    "cw.H": "Chunk 长度 H（动作数）",
+    "cw.fa": "Chunk 步进频率",
+    "cw.fc": "全身 / 底层控制器",
+    "cw.fpd": "关节 PD / 执行器回路",
+    "cw.note":
+      "参考：GR00T N1.7 将 action horizon 从 16 步提高到 40 步，并提供 <code>--execution-horizon</code> 参数（每次策略调用实际执行多少个预测动作）— {src}。Chunk 步进频率 = 数据集的控制频率。",
+    "cw.period": "推理周期",
+    "cw.maxLat": "同步执行时允许的最大推理延迟",
+    "cw.lowPer": "两次 VLA 更新之间的底层控制周期数",
+    "cw.consumed": "每次更新消耗的 chunk 动作数",
+    "cw.of": "/",
+    "cw.interp": "每个 chunk 步对应的底层控制周期",
+    "cw.interpNote": "（需在 chunk 动作之间插值）",
+    "cw.pdPer": "每个底层周期内的 PD 周期数",
+    "cw.warn":
+      "⚠ 一个 chunk 只覆盖 {span} ms，而下一次推理要 {period} ms 后才到 — 控制器会用完动作，只能保持或外推。请增大 H、降低 chunk 步进频率，或提高 VLA 频率。",
+    "cw.caution": "Chunk 覆盖时间不足两个推理周期 — 一旦某次推理变慢（p99 延迟），几乎没有余量。",
+    "cw.ok": "✓ 每个 chunk 覆盖 {n} 个推理周期 — 能容忍偶发的推理延迟，也可以只执行 chunk 的前一部分再重新规划。",
+    "cw.toBudget": "把 {fv} Hz 设为部署预算目标 →",
+
+    "b.title": "机器人部署预算",
+    "b.sub": "填写你实测的各环节延迟。默认值是<strong>示例数值</strong>，不是基准测试结果 — 请替换为你自己的 p99 数据。",
+    "b.inputs": "流水线延迟（ms）",
+    "b.target": "目标控制频率（Hz）",
+    "b.mode": "执行方式",
+    "b.seq": "顺序执行（一次处理一帧）",
+    "b.pipe": "流水线执行（各环节重叠）",
+    "b.speedup": "假设分析：优化后推理加速倍数",
+    "b.speedupNote": "加速倍数是<em>你的假设</em>（例如来自 TensorRT FP16 的实测），只作用于“模型推理”这一行。",
+    "b.result": "结果",
+    "b.bottlenecks": "潜在瓶颈",
+    "b.optPath": "可能的 NVIDIA 优化路径",
+    "b.e2e": "端到端延迟（传感器 → 动作）",
+    "b.cycleSlowest": "周期时间（最慢环节）",
+    "b.cycle": "周期时间",
+    "b.maxHz": "理论最高频率",
+    "b.targetHz": "目标控制频率",
+    "b.budget": "每周期预算",
+    "b.over": "⚠ 超出预算 {ms} ms",
+    "b.within": "✓ 在预算内 — 余量 {ms} ms",
+    "b.pipeNote":
+      "流水线能提高吞吐量，但每个动作依然基于 {ms} ms 之前的观测 — 策略必须能容忍这段延迟（见 Sim2Real 调试 → 观测延迟）。",
+    "b.largest": "← 最大",
+    "b.budgetBar": "预算",
+    "b.largestTitle": "最大耗时环节：{name}",
+    "b.adviceNote": "以上为通用工程实践建议。每次改动前后都应在目标设备上测量 p99 延迟。",
+    "b.rows": {
+      camera: "相机管线",
+      prepost: "前/后处理",
+      inference: "模型推理",
+      ros: "ROS 传输",
+      other: "其他（控制、日志）",
+    },
+    "b.advice": {
+      camera: [
+        "降低分辨率 / 只裁剪策略需要的区域",
+        "在 Jetson 上使用硬件加速采集与 ISP，避免 CPU 做颜色转换",
+        "检查曝光时间 — 长曝光会增加延迟和运动模糊",
+      ],
+      prepost: [
+        "把 resize / 归一化放到 GPU 上（例如 Isaac ROS 图像处理）",
+        "避免在预处理和推理之间做 CPU ↔ GPU 拷贝",
+        "尽量把预处理融合进 TensorRT engine",
+      ],
+      inference: [
+        "导出 PyTorch → ONNX → TensorRT；先试 FP16，再在精度校验下尝试 INT8 / FP8 / FP4",
+        "对于 diffusion / flow 动作头：减少去噪步数，用质量换延迟",
+        "每次调用执行更多 chunk 动作，从而降低推理频率",
+      ],
+      ros: [
+        "节点间 GPU 零拷贝传输（Isaac ROS：NITROS → rosidl::Buffer）",
+        "使用 composable node / 进程内通信",
+        "调整 QoS 与 executor，避免大消息序列化",
+      ],
+      other: ["用 Nsight Systems 做 profiling，找出隐藏的同步点和日志开销"],
+    },
+    "b.opt": {
+      pt: "研究基线；最容易调试，部署最慢。",
+      onnx: "与框架无关的计算图；在这里解决不支持的算子和动态 shape。",
+      fp16: "通常是第一个大幅提速点，精度风险小 — 需校验输出。",
+      int8: "需要校准或量化感知步骤；必须重新跑任务评估。",
+      thor: "在目标设备上构建 engine；在真实功耗模式下做基准测试。",
+    },
+
+    "s.title": "我的人形机器人策略在仿真里没问题，上真机就失败。为什么？",
+    "s.sub": "先选择你看到的现象，再选择一个可能原因，查看 SIM 与 REAL 的对比、排查方法和修复方式。",
+    "s.pickSymptom": "↑ 选择一个现象，查看可能原因。",
+    "s.causes": "可能原因",
+    "s.pickCause": "选择一个原因，查看 SIM 与 REAL 的对比。",
+    "s.check": "如何排查",
+    "s.fix": "如何修复",
+    "s.dr": "训练时的 Domain Randomization（示例范围）",
+
+    "ai.title": "AI 架构设计 — 即将推出",
+    "ai.p1":
+      "“AI Physical AI 架构师”：描述你的机器人、传感器、算力、任务和数据，得到一份结构化的工作流建议及取舍分析（为什么不只用 RL、为什么要仿真、为什么用 GR00T、瓶颈在哪、该测什么、部署时可能出什么问题）。",
+    "ai.p2": "计划设计：用户自带 API Key，仅保存在浏览器会话中，或通过一个小型代理。当前页面不会向任何地方发送数据。",
+
+    "footer.main":
+      '作者 <a href="https://github.com/ImChong">Chong Liu</a> · <a href="https://github.com/ImChong/Physical_AI_Workflow_Explorer">GitHub 源码</a> · 个人独立项目，与 NVIDIA 无隶属或背书关系。产品名称归其所有者所有。标注“示例”的数值仅作说明，取决于具体机器人。',
+    "footer.related": "相关项目：",
+  },
+};

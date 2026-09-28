@@ -25,6 +25,8 @@ Task → Teleop → Cosmos / GR00T-Mimic → Isaac Sim → Isaac Lab → GR00T (
 | **Engineer Mode** | Numbers and timing instead of concepts. On the GR00T stage: drag the **VLA inference frequency** slider and see inference period, low-level control cycles between VLA updates, action-chunk coverage, and a warning when the chunk runs out before the next inference. |
 | **Deployment Budget** | Enter per-stage latency (camera, pre/post, inference, ROS). Get total latency, max frequency, over/under budget vs. a target rate, the largest bottleneck, a sequential vs. pipelined comparison, and a what-if inference speed-up along the PyTorch → ONNX → TensorRT → Jetson Thor path. |
 | **Debug Sim2Real** | *“My humanoid policy works in simulation but fails on the robot. Why?”* Pick a symptom → candidate causes → SIM vs. REAL picture, how to check, how to fix, and example domain-randomisation ranges. |
+| **中文 / English** | One-click language switch (also `?lang=zh` / `?lang=en` in the URL; defaults to the browser language). |
+| **Light / Dark** | Follows the OS theme by default; the ☾ / ☀ button overrides it and the choice is remembered. |
 | **Design with AI** | *Planned* — an AI architect that turns a robot/task/data description into a structured workflow recommendation. |
 
 ## Why I built this
@@ -64,8 +66,10 @@ Content lives in data files, so adding a stage, task or Sim2Real cause doesn't t
 
 ```
 index.html
-assets/js/workflow-data.js   # stages, tasks, sources
-assets/js/sim2real-data.js   # symptoms → causes
+assets/js/workflow-data.js   # stages, tasks, sources (English)
+assets/js/sim2real-data.js   # symptoms → causes (English)
+assets/js/i18n.js            # UI strings, en + zh
+assets/js/content-zh.js      # Chinese content overrides (falls back to English per field)
 assets/js/app.js             # rendering, calculators, routing (#/workflow/<id>, #/budget, #/sim2real/<symptom>/<cause>)
 assets/css/style.css
 ```
